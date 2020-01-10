@@ -1,5 +1,4 @@
 import socket
-import pickle
 from linkedlist import LinkedList, Node
 
 # hostname and port config
