@@ -1,6 +1,6 @@
 import socket
 import pickle
-import _thread
+from multiprocessing import Process
 import os
 from linkedlist import LinkedList, Node
 
@@ -51,5 +51,6 @@ def new_client(conn, addr):
 # and keep listening for more connection requests
 while True:
     conn_sock, addr = s.accept()
-    _thread.start_new_thread(new_client,(conn_sock,addr))
+    p = Process(target=new_client, args=(conn_sock, addr))
+    p.start()
 s.close()
