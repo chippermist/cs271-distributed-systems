@@ -25,4 +25,4 @@ class PriorityQueue(object):
             return item 
         except IndexError: 
             print() 
-            exit() 
+            exit()

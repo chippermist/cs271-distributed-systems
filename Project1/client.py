@@ -52,7 +52,7 @@ while True:
         c.send(msg)
         current_balance = (c.recv(1024))
         print(f"The client {PID} has the current balance of ${current_balance.decode()}.\n")
-
+c.close()
 
 def recv_msg(sock):
     while True:
