@@ -10,15 +10,27 @@ class Node:
 
 
 # Linked List class contains a Node object 
-class LinkedList: 
+class LinkedList:
 
     # Function to initialize head 
     def __init__(self): 
         self.head = None
+        
+    # Function to insert a new Node into linked list
+    def insert(self, transaction):
+        temp = self.head
+        if temp is not None:
+            while(temp is not None and temp.next is not None):
+                temp = temp.next
+                continue
+            temp.next = transaction
+        else:
+            temp = transaction
+        self.printList()
 
     # This function prints contents of linked list 
     # starting from head 
-    def printList(self): 
+    def printList(self):
         temp = self.head 
         while (temp): 
             print(temp.data) 
@@ -33,5 +45,5 @@ class LinkedList:
             if PID == temp.sender:
                 final_bal -= temp.amount
             elif PID == temp.reciever:
-                final_bal -= temp.amount
+                final_bal += temp.amount
         return final_bal
