@@ -10,11 +10,11 @@ class Node:
 
 
 # Linked List class contains a Node object 
-class LinkedList:
+class LinkedList():
 
     # Function to initialize head 
-    def __init__(self): 
-        self.head = None
+    def __init__(self, head=None): 
+        self.head = head
         
     # Function to insert a new Node into linked list
     def insert(self, transaction):
