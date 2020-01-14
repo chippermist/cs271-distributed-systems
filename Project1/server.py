@@ -58,6 +58,7 @@ def new_client(conn, addr):
                     print(f"The current balance for {client_id} is ${current_bal}.")
                     conn.sendall(bytes(f"The current balance for client {client_id} is ${current_bal}", "utf-8"))
                     print(f"The balance has been sent to {client_id}.\n")
+                bchain.printList()
     conn.close()
 
 # Start accepting connections from the server

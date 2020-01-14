@@ -24,7 +24,6 @@ CLIENTS.remove(PORT) #removing the current clients port
 
 # local queue for Lamport's Distributed Solution
 # this list needs to be maintained based on the priority
-# TODO: maybe this needs to be a priority queue
 local_queue = PriorityQueue()
 
 # client debug information
@@ -35,6 +34,7 @@ print(f"Socket connection is running on port {PORT}")
 c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 c.connect((HOSTNAME, 1234))
 local_clock = 0 # init clock
+l = Lock()
 
 
 # Possible thread1 -- parent thread
@@ -42,8 +42,8 @@ local_clock = 0 # init clock
 def transactions():
     global local_clock
     while True:
-        print(f"This client ID is {PID}.")
-        print("\n\nWhat type of transaction do you want to issue?\n1. Transfer\n2. Balance")
+        print(f"\n\nThis client ID is {PID}.")
+        print("What type of transaction do you want to issue?\n1. Transfer\n2. Balance")
         option = int(input())
         if option == 1:
             print("Enter the Reciever ID: ")
@@ -52,62 +52,55 @@ def transactions():
             amount = int(input())
             print(f"You {PID} are sending {amount} to {reciever}")
             transaction = Node(PID, reciever, amount)
-            # TODO: finish the transaction logic
             msg = pickle.dumps(transaction)
             msg = bytes(f"{1:<{HEADERSIZE}}", "utf-8")+msg
-            # c.send(msg)
-            # response = (c.recv(1024))
-            # print(f"Response from server: {response.decode()}")
             local_queue.insert(QueueNode(local_clock, PID, msg))
             msg = bytes(f"{'T':<{HEADERSIZE}}", "utf-8")
             print("Starting thread for transaction.")
-            p = Process(name="Send Request Thread Transaction", target=send_request, args=(local_clock, msg))
+            p = Process(name="Send Request Thread Transaction", target=send_request, args=(msg,))
             p.start()
             p.join()
         else:
             print(f"Checking balance for {PID}...")
-            # TODO: finish the balance logic
             msg = pickle.dumps(PID)
-            # print(pickle.loads(msg))
             msg = bytes(f"{2:<{HEADERSIZE}}", "utf-8")+msg
-            # print(msg)
-            # c.send(msg)
-            # current_balance = (c.recv(1024))
-            # print(f"The client {PID} has the current balance of ${current_balance.decode()}.\n")
             local_queue.insert(QueueNode(local_clock, PID, msg))
             msg = bytes(f"{'B':<{HEADERSIZE}}", "utf-8")
             print("Starting thread for balance.")
-            p = Process(name="Send Request Thread Balance", target=send_request, args=(local_clock, msg))
+            p = Process(name="Send Request Thread Balance", target=send_request, args=(msg,))
             p.start()
             p.join()
+        l.acquire()
+        local_clock += 1
+        l.release()
 
 
 # function to reply to client and send to server
 def send_reply(conn, addr):
+    global local_clock
     # recieve message from conn
     # update the clock from within the message
     # check what kind of message it is and reply accordingly
-    global local_clock
     data = conn.recv(1024)
     msg = (data[:HEADERSIZE])
     msg = msg.decode().lstrip().rstrip()
     print(f"The message is {msg}.")
     recv_clock = (data[HEADERSIZE:])
-    # print(f"The clock in message is {recv_clock}")
+    print(f"Clock recieved is {recv_clock}")
     recv_clock = int(recv_clock.decode())
-    local_clock = max(recv_clock, local_clock) + 1
+    update_clock(recv_clock)
     print(f"The clock recieved is {recv_clock}. Local clock now is {local_clock}.")
     if msg:
         conn.sendall(bytes(f"{'G':<{HEADERSIZE}}", "utf-8") + bytes(f"{str(local_clock)}", "utf-8"))
         print(f"Sending OK to client: {addr}.")
     conn.close()
 
-def send_request(clock, msg):
+def send_request(msg):
+    global local_clock
     # read a list of ports of other clients, 
     # if they are alive then send the request for whatever is the message, 
     # if they are not alive then ignore
-    # time.sleep(5)
-    global local_clock
+    time.sleep(5)
     print(f"Local clock is {local_clock}.")
     send_msg = msg + bytes(str(local_clock), "utf-8")
     print(f"Sending request to clients on ports {CLIENTS}.")
@@ -123,19 +116,20 @@ def send_request(clock, msg):
             recv_msg = (s.recv(1024))
             header = (recv_msg[:HEADERSIZE])
             header = header.decode().lstrip().rstrip()
-            print(f"Message recieved from other clients: {header}")
+            print(f"Message recieved from other clients: {header}.")
             recv_clock = (recv_msg[HEADERSIZE:])
             recv_clock = int(recv_clock.decode())
-            print(f"Clock recieved from client {client_port} is {recv_clock}")
-            local_clock = update_clock(recv_clock, local_clock)
-            print(f"The message recieved is {header}")
+            print(f"Clock recieved from client {client_port} is {recv_clock}.")
+            update_clock(recv_clock)
             if header == "G":
                 count_responses += 1
         except:
-            print(f"Client on port {client_port} is not alive.")
+            print(colored(f"Client on port {client_port} is not alive.", 'yellow'))
+            CLIENTS.remove(client_port)
         
         if count_responses == len(CLIENTS):
             item = local_queue.find_first()
+
             if item.pid == PID and item.clock <= local_clock:
                 msg = item.transaction
                 local_queue.delete()
@@ -160,8 +154,11 @@ def client_processing():
     client_listen.close()
 
 # update the local clock
-def update_clock(recieved_clock, local_clock):
-    return max(recieved_clock, local_clock) + 1
+def update_clock(recieved_clock):
+    global local_clock
+    l.acquire()
+    local_clock = max(recieved_clock, local_clock) + 1
+    l.release()
 
 if __name__ == "__main__":
     # create a background thread for the client processing
