@@ -3,6 +3,7 @@ import os
 import pickle
 import time
 import argparse
+import threading
 from multiprocessing import Process, Lock
 from termcolor import colored
 from linkedlist import Node, LinkedList
@@ -41,6 +42,7 @@ l = Lock()
 # could handle user input
 def transactions():
     global local_clock
+    global local_queue
     while True:
         print(f"\n\nThis client ID is {PID}.")
         print("What type of transaction do you want to issue?\n1. Transfer\n2. Balance")
@@ -55,9 +57,9 @@ def transactions():
             msg = pickle.dumps(transaction)
             msg = bytes(f"{1:<{HEADERSIZE}}", "utf-8")+msg
             local_queue.insert(QueueNode(local_clock, PID, msg))
-            msg = bytes(f"{'T':<{HEADERSIZE}}", "utf-8")
+            msg = bytes(f"{'T':<{HEADERSIZE}}", "utf-8") + pickle.dumps(QueueNode(local_clock, PID, msg))
             print("Starting thread for transaction.")
-            p = Process(name="Send Request Thread Transaction", target=send_request, args=(msg,))
+            p = threading.Thread(name="Send Request Thread Transaction", target=send_request, args=(msg,))
             p.start()
             p.join()
         else:
@@ -67,7 +69,7 @@ def transactions():
             local_queue.insert(QueueNode(local_clock, PID, msg))
             msg = bytes(f"{'B':<{HEADERSIZE}}", "utf-8") + pickle.dumps(QueueNode(local_clock, PID, msg))
             print("Starting thread for balance.")
-            p = Process(name="Send Request Thread Balance", target=send_request, args=(msg,))
+            p = threading.Thread(name="Send Request Thread Balance", target=send_request, args=(msg,))
             p.start()
             p.join()
         l.acquire()
@@ -77,7 +79,8 @@ def transactions():
 
 # function to reply to client and send to server
 def send_reply(conn, addr):
-    global local_clock
+    # global local_clock
+    global local_queue
     # recieve message from conn
     # update the clock from within the message
     # check what kind of message it is and reply accordingly
@@ -86,29 +89,33 @@ def send_reply(conn, addr):
     msg = msg.decode().lstrip().rstrip()
     print(f"The message is {msg}.")
     recv_msg = (data[HEADERSIZE:])
+    # print(f"Message recieved is {recv_msg}.")
     recv_msg = pickle.loads(recv_msg)
     recv_clock = recv_msg.clock
     print(f"Clock recieved is {recv_clock}")
     # recv_clock = int(recv_clock.decode())
-    update_clock(recv_clock)
     print(f"The clock recieved is {recv_clock}. Local clock now is {local_clock}.")
     if msg == 'B' or msg == 'T':
         conn.sendall(bytes(f"{'G':<{HEADERSIZE}}", "utf-8") + bytes(f"{str(local_clock)}", "utf-8"))
-        print(f"Adding remote transaction from {recv_msg.pid} with clock {recv_clock}.")
+        print(colored(f"Adding remote transaction from {recv_msg.pid} with clock {recv_clock}.", 'blue'))
         local_queue.insert(recv_msg)
+        update_clock(recv_clock)
         print(f"Sending OK to client: {addr}.")
     elif msg == 'D':
         #TODO: delete from queue
-        print(f"Removing remote transaction from {recv_msg.pid} with clock {recv_clock}.")
+        print(colored(f"Removing remote transaction from {recv_msg.pid} with clock {recv_clock}.", 'blue'))
         local_queue.delete_with_pid(recv_clock, recv_msg.pid)
     conn.close()
 
+# Function to send request to the clients and server
 def send_request(msg):
     global local_clock
+    global CLIENTS
+    global local_queue
     # read a list of ports of other clients, 
     # if they are alive then send the request for whatever is the message, 
     # if they are not alive then ignore
-    time.sleep(5)
+    # time.sleep(5)
     print(f"Local clock is {local_clock}.")
     send_msg = msg
     print(f"Sending request to clients on ports {CLIENTS}.")
@@ -124,6 +131,7 @@ def send_request(msg):
             message_type = (send_msg[:HEADERSIZE])
             message_type = message_type.decode().lstrip().rstrip()
             if message_type == 'D':
+                print(f"Message is delete : {message_type}")
                 continue
             # TODO: need to read back the response and then process it and send to server here instead of send_request
             recv_msg = (s.recv(1024))
@@ -134,7 +142,7 @@ def send_request(msg):
             recv_clock = int(recv_clock.decode())
             print(f"Clock recieved from client {client_port} is {recv_clock}.")
             update_clock(recv_clock)
-            if header == "G":
+            if header == 'G':
                 count_responses += 1
         except:
             print(colored(f"Client on port {client_port} is not alive.", 'yellow'))
@@ -145,18 +153,19 @@ def send_request(msg):
             item = local_queue.find_first()
 
             # if the transcation in the front of the queue is yours
-            if item.pid == PID and item.clock <= local_clock:
+            if item.pid == PID:
                 msg = item.transaction
                 print("Removing transaction from local queue.")
-                local_queue.delete()
+                local_queue.delete_with_pid(item.clock, item.pid)
+                local_queue.printQueue()
                 print("Sending transaction to server.")
                 c.send(msg)
                 response = (c.recv(1024))
                 print(colored(f"{response.decode()}\n", 'green'))
                 remove_msg = bytes(f"{'D':<{HEADERSIZE}}", "utf-8") + pickle.dumps(item)
-                p = Process(name="Remove processed transaction thread", target=send_request, args=(remove_msg,))
+                p = threading.Thread(name="Remove processed transaction thread", target=send_request, args=(remove_msg,))
                 p.start()
-                p.join()
+                # p.join()
 
         s.close()
 
@@ -169,7 +178,7 @@ def client_processing():
         # TODO: finish logic for recieving the requests as well as updating queue & clock
         print("Waiting for connections.")
         conn, addr = client_listen.accept()
-        response_thread = Process(name="Client Response thread", target=send_reply, args=(conn, addr))
+        response_thread = threading.Thread(name="Client Response thread", target=send_reply, args=(conn, addr))
         response_thread.start()
         response_thread.join()
     client_listen.close()
@@ -183,7 +192,7 @@ def update_clock(recieved_clock):
 
 if __name__ == "__main__":
     # create a background thread for the client processing
-    p1 = Process(name="Client Processing -- Background", target=client_processing, args=())
+    p1 = threading.Thread(name="Client Processing -- Background", target=client_processing, args=())
     p1.daemon = False
     p1.start()
 

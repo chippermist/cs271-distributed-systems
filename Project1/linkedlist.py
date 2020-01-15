@@ -47,3 +47,12 @@ class LinkedList():
             elif PID == temp.reciever:
                 final_bal += temp.amount
         return final_bal
+
+def calculateBalance(arr, INIT_BAL, PID):
+    final_bal = INIT_BAL
+    for item in arr:
+        if PID == item.sender:
+            final_bal -= item.amount
+        elif PID == item.reciever:
+            final_bal += item.amount
+    return final_bal

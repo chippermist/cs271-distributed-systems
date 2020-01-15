@@ -28,11 +28,11 @@ class PriorityQueue(object):
             for i in range(len(self.queue)): 
                 if self.queue[i].clock < self.queue[min].clock: 
                     min = i  
-            print(f"Removing {self.queue[min].transaction} from queue.")
+            # print(f"Removing {self.queue[min].transaction} from queue.")
             del self.queue[min] 
             # return item 
         except IndexError: 
-            print() 
+            print("No transaction to delete.")
             exit()
 
     def delete_with_pid(self, clock, pid):
@@ -55,5 +55,10 @@ class PriorityQueue(object):
                 item = self.queue[min]
                 return item
         except IndexError:
-            print()
+            print("There are no transactions in queue.")
             exit()
+    
+    def printQueue(self):
+        print("Queue is: ")
+        for i in range(len(self.queue)):
+            print(f"{self.queue[i].pid} - {self.queue[i].clock}")
