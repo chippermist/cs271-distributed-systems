@@ -4,7 +4,7 @@ import os
 from multiprocessing import Process, Lock
 from termcolor import colored
 import threading
-from linkedlist import LinkedList, Node, calculateBalance
+from linkedlist import Node, calculateBalance
 
 # hostname and port config
 HOST = socket.gethostname() # could just be 127.0.0.1

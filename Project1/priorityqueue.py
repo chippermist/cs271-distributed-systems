@@ -50,7 +50,10 @@ class PriorityQueue(object):
         try:
             min = 0
             for i in range(len(self.queue)):
-                if self.queue[i].clock < self.queue[min].clock:
+                if self.queue[i].clock == self.queue[min].clock:
+                    if self.queue[i].pid < self.queue[min].pid:
+                        min = i
+                elif self.queue[i].clock < self.queue[min].clock:
                     min = i
                 item = self.queue[min]
                 return item

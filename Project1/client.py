@@ -6,8 +6,7 @@ import argparse
 import threading
 from multiprocessing import Process, Lock
 from termcolor import colored
-from linkedlist import Node, LinkedList
-# from queue import PriorityQueue
+from linkedlist import Node
 from priorityqueue import *
 
 # check for valid command line arguments
