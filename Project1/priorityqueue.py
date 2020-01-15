@@ -27,12 +27,22 @@ class PriorityQueue(object):
             min = 0
             for i in range(len(self.queue)): 
                 if self.queue[i].clock < self.queue[min].clock: 
-                    min = i 
-            item = self.queue[min] 
+                    min = i  
+            print(f"Removing {self.queue[min].transaction} from queue.")
             del self.queue[min] 
-            return item 
+            # return item 
         except IndexError: 
             print() 
+            exit()
+
+    def delete_with_pid(self, clock, pid):
+        try:
+            for i in range(len(self.queue)):
+                if self.queue[i].clock == clock and self.queue[i].pid == pid:
+                    del self.queue[i]
+                    break
+        except:
+            print("No such transaction to delete.")
             exit()
 
     # for finding the first element in queue

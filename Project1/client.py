@@ -65,7 +65,7 @@ def transactions():
             msg = pickle.dumps(PID)
             msg = bytes(f"{2:<{HEADERSIZE}}", "utf-8")+msg
             local_queue.insert(QueueNode(local_clock, PID, msg))
-            msg = bytes(f"{'B':<{HEADERSIZE}}", "utf-8")
+            msg = bytes(f"{'B':<{HEADERSIZE}}", "utf-8") + pickle.dumps(QueueNode(local_clock, PID, msg))
             print("Starting thread for balance.")
             p = Process(name="Send Request Thread Balance", target=send_request, args=(msg,))
             p.start()
@@ -85,14 +85,22 @@ def send_reply(conn, addr):
     msg = (data[:HEADERSIZE])
     msg = msg.decode().lstrip().rstrip()
     print(f"The message is {msg}.")
-    recv_clock = (data[HEADERSIZE:])
+    recv_msg = (data[HEADERSIZE:])
+    recv_msg = pickle.loads(recv_msg)
+    recv_clock = recv_msg.clock
     print(f"Clock recieved is {recv_clock}")
-    recv_clock = int(recv_clock.decode())
+    # recv_clock = int(recv_clock.decode())
     update_clock(recv_clock)
     print(f"The clock recieved is {recv_clock}. Local clock now is {local_clock}.")
-    if msg:
+    if msg == 'B' or msg == 'T':
         conn.sendall(bytes(f"{'G':<{HEADERSIZE}}", "utf-8") + bytes(f"{str(local_clock)}", "utf-8"))
+        print(f"Adding remote transaction from {recv_msg.pid} with clock {recv_clock}.")
+        local_queue.insert(recv_msg)
         print(f"Sending OK to client: {addr}.")
+    elif msg == 'D':
+        #TODO: delete from queue
+        print(f"Removing remote transaction from {recv_msg.pid} with clock {recv_clock}.")
+        local_queue.delete_with_pid(recv_clock, recv_msg.pid)
     conn.close()
 
 def send_request(msg):
@@ -102,16 +110,21 @@ def send_request(msg):
     # if they are not alive then ignore
     time.sleep(5)
     print(f"Local clock is {local_clock}.")
-    send_msg = msg + bytes(str(local_clock), "utf-8")
+    send_msg = msg
     print(f"Sending request to clients on ports {CLIENTS}.")
     count_responses = 0
     for client_port in CLIENTS:
         print(f"Trying to connect to client: {client_port}.")
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # send message to client to sync and get their OK
         try:
             s.connect((HOSTNAME, client_port))
             s.send(send_msg)
             print(f"Message sent to client: {client_port}.")
+            message_type = (send_msg[:HEADERSIZE])
+            message_type = message_type.decode().lstrip().rstrip()
+            if message_type == 'D':
+                continue
             # TODO: need to read back the response and then process it and send to server here instead of send_request
             recv_msg = (s.recv(1024))
             header = (recv_msg[:HEADERSIZE])
@@ -127,16 +140,24 @@ def send_request(msg):
             print(colored(f"Client on port {client_port} is not alive.", 'yellow'))
             CLIENTS.remove(client_port)
         
+        # check if you can process the transaction
         if count_responses == len(CLIENTS):
             item = local_queue.find_first()
 
+            # if the transcation in the front of the queue is yours
             if item.pid == PID and item.clock <= local_clock:
                 msg = item.transaction
+                print("Removing transaction from local queue.")
                 local_queue.delete()
-                print(f"Sending transaction to server.")
+                print("Sending transaction to server.")
                 c.send(msg)
                 response = (c.recv(1024))
                 print(colored(f"{response.decode()}\n", 'green'))
+                remove_msg = bytes(f"{'D':<{HEADERSIZE}}", "utf-8") + pickle.dumps(item)
+                p = Process(name="Remove processed transaction thread", target=send_request, args=(remove_msg,))
+                p.start()
+                p.join()
+
         s.close()
 
 # Possible thread2 -- could handle updating queue and sending replies
