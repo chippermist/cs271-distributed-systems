@@ -71,9 +71,7 @@ def transactions():
             p = threading.Thread(name="Send Request Thread Balance", target=send_request, args=(msg,))
             p.start()
             p.join()
-        l.acquire()
-        local_clock += 1
-        l.release()
+        update_clock(local_clock)
 
 
 # function to reply to client and send to server
@@ -91,6 +89,7 @@ def send_reply(conn, addr):
     # print(f"Message recieved is {recv_msg}.")
     recv_msg = pickle.loads(recv_msg)
     recv_clock = recv_msg.clock
+    update_clock(recv_clock)
     print(f"Clock recieved is {recv_clock}")
     # recv_clock = int(recv_clock.decode())
     print(f"The clock recieved is {recv_clock}. Local clock now is {local_clock}.")
@@ -98,10 +97,9 @@ def send_reply(conn, addr):
         conn.sendall(bytes(f"{'G':<{HEADERSIZE}}", "utf-8") + bytes(f"{str(local_clock)}", "utf-8"))
         print(colored(f"Adding remote transaction from {recv_msg.pid} with clock {recv_clock}.", 'blue'))
         local_queue.insert(recv_msg)
-        update_clock(recv_clock)
         print(f"Sending OK to client: {addr}.")
     elif msg == 'D':
-        #TODO: delete from queue
+        # delete from the queue
         print(colored(f"Removing remote transaction from {recv_msg.pid} with clock {recv_clock}.", 'blue'))
         local_queue.delete_with_pid(recv_clock, recv_msg.pid)
     conn.close()
@@ -126,13 +124,13 @@ def send_request(msg):
         try:
             s.connect((HOSTNAME, client_port))
             s.send(send_msg)
+            update_clock(local_clock)
             print(f"Message sent to client: {client_port}.")
             message_type = (send_msg[:HEADERSIZE])
             message_type = message_type.decode().lstrip().rstrip()
             if message_type == 'D':
                 print(f"Message is delete : {message_type}")
                 continue
-            # TODO: need to read back the response and then process it and send to server here instead of send_request
             recv_msg = (s.recv(1024))
             header = (recv_msg[:HEADERSIZE])
             header = header.decode().lstrip().rstrip()
@@ -174,7 +172,6 @@ def client_processing():
     client_listen.bind((HOSTNAME, PORT))
     client_listen.listen()
     while True:
-        # TODO: finish logic for recieving the requests as well as updating queue & clock
         print("Waiting for connections.")
         conn, addr = client_listen.accept()
         response_thread = threading.Thread(name="Client Response thread", target=send_reply, args=(conn, addr))
@@ -190,9 +187,10 @@ def update_clock(recieved_clock):
     l.release()
 
 if __name__ == "__main__":
+    print(colored('The current balance is $10', 'green'))
     # create a background thread for the client processing
     p1 = threading.Thread(name="Client Processing -- Background", target=client_processing, args=())
-    p1.daemon = False
+    p1.daemon = False   # maybe try running in daemon if they allow spawnning threads
     p1.start()
 
     # continue with the parent thread for user input

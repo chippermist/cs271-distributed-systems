@@ -1,7 +1,7 @@
 import socket
 import pickle   # TODO: Unsafe -- change to some safe object
 import os
-from multiprocessing import Process, Lock
+from multiprocessing import Process
 from termcolor import colored
 import threading
 from linkedlist import Node, calculateBalance
@@ -14,14 +14,13 @@ HEADERSIZE = 2
 # other configurations for clients
 INIT_BAL = 10
 bchain = []
-l = Lock()
 
 # set up the socket with IPV4 and TCP
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind((HOST, PORT))
 
 print(f"Server PID: {os.getpid()}\nStarting to listen on {HOST}:{PORT}\n")
-s.listen(5) # start listining and accepting the connections
+s.listen(5) # start listening and accepting the connections
 
 # Function to serve clients -- it uses threads so it can effectively spin
 # a new thread that handles client requests
@@ -34,20 +33,19 @@ def new_client(conn, addr):
             data = conn.recv(1024)
             # if there is no more data then release lock and break
             if not data:
-                # TODO: check if this is ok...since this stays open until client quits
                 print("There is no more data. Closing connection.")
                 conn.close()
                 break
             else:
-                l.acquire()
                 msg = (data[:HEADERSIZE])
                 msg = int(msg.decode())
                 print("----------------------")
                 print(f"The transaction type is {msg}.\n")
+                # Money Transactions
                 if msg == 1:
                     transaction = (pickle.loads(data[HEADERSIZE:]))
                     print(f"Sending ${transaction.amount} from {transaction.sender} to {transaction.reciever}.\n")
-                    # TODO: finish logic for adding transaction to linked list
+                    # check if the balance is enough so that the transaction is valid
                     if calculateBalance(bchain, INIT_BAL, transaction.sender) >= transaction.amount:
                         bchain.append(transaction)
                         conn.sendall(bytes(f"SUCCESS", "utf-8"))
@@ -55,6 +53,7 @@ def new_client(conn, addr):
                     else:
                         conn.sendall(bytes(f"INCORRECT", "utf-8"))
                         print(f"INCORRECT transaction from {transaction.sender}.")
+                # Balance Transactions
                 elif msg == 2:
                     client_id = int(pickle.loads(data[HEADERSIZE:]))
                     print(f"Checking the balance for client {client_id}.")
@@ -63,7 +62,6 @@ def new_client(conn, addr):
                     conn.sendall(bytes(f"The current balance for client {client_id} is ${current_bal}", "utf-8"))
                     print(f"The balance has been sent to {client_id}.\n")
                 print(bchain)
-                l.release()
     conn.close()
 
 # Start accepting connections from the server
