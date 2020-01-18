@@ -4,7 +4,7 @@ import pickle
 import time
 import argparse
 import threading
-from multiprocessing import Process, Lock
+from multiprocessing import Process, Lock, Value
 from termcolor import colored
 from linkedlist import Node
 from priorityqueue import *
@@ -50,7 +50,7 @@ def transactions():
             print("Enter the Reciever ID: ")
             reciever = int(input())
             print("Enter the amount you wish to send: ")
-            amount = int(input())
+            amount = float(input())
             print(f"You {PID} are sending {amount} to {reciever}")
             transaction = Node(PID, reciever, amount)
             msg = pickle.dumps(transaction)
@@ -112,6 +112,7 @@ def send_request(msg):
     # read a list of ports of other clients, 
     # if they are alive then send the request for whatever is the message, 
     # if they are not alive then ignore
+    # maybe wait 5 seconds so you can do concurrent requests within clients
     # time.sleep(5)
     print(f"Local clock is {local_clock}.")
     send_msg = msg
@@ -132,6 +133,7 @@ def send_request(msg):
                 print(f"Message is delete : {message_type}")
                 continue
             recv_msg = (s.recv(1024))
+            s.close()
             header = (recv_msg[:HEADERSIZE])
             header = header.decode().lstrip().rstrip()
             print(f"Message recieved from other clients: {header}.")
@@ -145,26 +147,27 @@ def send_request(msg):
             print(colored(f"Client on port {client_port} is not alive.", 'yellow'))
             CLIENTS.remove(client_port)
         
-        # check if you can process the transaction
-        if count_responses == len(CLIENTS):
-            item = local_queue.find_first()
+    # check if you can process the transaction
+    if count_responses == len(CLIENTS):
+        item = local_queue.find_first()
 
-            # if the transcation in the front of the queue is yours
-            if item.pid == PID:
-                msg = item.transaction
-                print("Removing transaction from local queue.")
-                local_queue.delete_with_pid(item.clock, item.pid)
-                local_queue.printQueue()
-                print("Sending transaction to server.")
-                c.send(msg)
-                response = (c.recv(1024))
-                print(colored(f"{response.decode()}\n", 'green'))
-                remove_msg = bytes(f"{'D':<{HEADERSIZE}}", "utf-8") + pickle.dumps(item)
-                p = threading.Thread(name="Remove processed transaction thread", target=send_request, args=(remove_msg,))
-                p.start()
-                # p.join()
+        # if there is a item remaining 
+        # if the transcation in the front of the queue is yours
+        if item and item.pid == PID:
+            msg = item.transaction
+            print("Removing transaction from local queue.")
+            local_queue.delete_with_pid(item.clock, item.pid)
+            local_queue.printQueue()
+            print("Sending transaction to server.")
+            c.send(msg)
+            response = (c.recv(1024))
+            print(colored(f"{response.decode()}\n", 'green'))
+            remove_msg = bytes(f"{'D':<{HEADERSIZE}}", "utf-8") + pickle.dumps(item)
+            p = threading.Thread(name="Remove processed transaction thread", target=send_request, args=(remove_msg,))
+            p.start()
+            p.join()
 
-        s.close()
+        # s.close()
 
 # Possible thread2 -- could handle updating queue and sending replies
 def client_processing():
@@ -190,7 +193,7 @@ if __name__ == "__main__":
     print(colored('The current balance is $10', 'green'))
     # create a background thread for the client processing
     p1 = threading.Thread(name="Client Processing -- Background", target=client_processing, args=())
-    p1.daemon = False   # maybe try running in daemon if they allow spawnning threads
+    p1.daemon = True   # maybe try running in daemon if they allow spawnning threads
     p1.start()
 
     # continue with the parent thread for user input
