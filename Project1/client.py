@@ -113,9 +113,13 @@ def send_request(msg):
     # if they are alive then send the request for whatever is the message, 
     # if they are not alive then ignore
     # maybe wait 5 seconds so you can do concurrent requests within clients
-    # time.sleep(5)
-    print(f"Local clock is {local_clock}.")
+    # only wait for transactions that are new
     send_msg = msg
+    msg_type = (msg[:HEADERSIZE])
+    msg_type = msg_type.decode().lstrip().rstrip()
+    if msg_type == 'B' or msg_type == 'T':
+        time.sleep(5)
+    print(f"Local clock is {local_clock}.")
     print(f"Sending request to clients on ports {CLIENTS}.")
     count_responses = 0
     for client_port in CLIENTS:
