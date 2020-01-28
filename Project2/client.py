@@ -1,6 +1,5 @@
 import socket
 import pickle
-import time
 import argparse
 import threading
 from termcolor import colored
@@ -103,39 +102,12 @@ def send_to_clients(msg, client_id):
         s.close()
     except:
         print(colored(f"Client on port {client_id} is offline.", 'yellow'))
-
-    # for client_port in CLIENTS:
-    #     print(colored("Sending sync message to {client}.", 'yellow'))
-    #     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #     try:
-    #         # sending the sync message to all clients
-    #         s.connect((HOSTNAME, client_port))
-    #         s.send(msg)
-    #         # TODO: check if something else needs to be done here
-    #         s.close()
-    #     except:
-    #         print(colored(f"Client on port {client_port} is offline.", 'yellow'))
-    #         CLIENTS.remove(client_port)
     
 def process_clients_sync(conn, addr):
     data = conn.recv(1024)
     msg = pickle.loads(data)
-
-    # thread causes issue here...change it to step by step maybe 
-
-    # thread to update blockchain
-    # bchain_update = threading.Thread(name="Update blockchain thread", target=update_bchain, args=(msg.transactions, msg.client_id))
-    # bchain_update.start()
     update_bchain(msg.transactions, msg.client_id)
-
-    # thread to update the time table and local clock
-    # clock_update = threading.Thread(name="Update clock and time table thread", target=update_clock, args=(msg.clock,msg.client_id))
-    # clock_update.start()
     update_clock(msg.clock,msg.client_id)
-    
-    # cleanup
-    # bchain_update.join()
-    # clock_update.join()
 
 
 def listen_to_clients():
