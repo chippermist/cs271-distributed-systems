@@ -1,10 +1,8 @@
 import socket
-import os
 import pickle
 import time
 import argparse
 import threading
-from multiprocessing import Process, Lock, Value
 from termcolor import colored
 from linkedlist import Node, SyncMsg, calculateBalance
 
@@ -14,7 +12,6 @@ parser.add_argument('--port' ,nargs=1, type=int, required=True, help="Port numbe
 args = parser.parse_args()
 
 # the pid will serve as the client ID/PID
-PID         = os.getpid()
 HOSTNAME    = socket.gethostname()
 PORT        = (args.port)[0]
 HEADERSIZE  = 2
@@ -34,29 +31,31 @@ def create_transactions():
     global local_clock
     global bchain
     while True:
-        print(colored(f"\n\nThis client ID is {PID}.", 'cyan'))
+        print(bchain)
+        print(colored(f"\n\nThis client ID is {PORT}.", 'cyan'))
         print("What type of transaction do you want to issue?\n\t1. Transfer\n\t2. Balance\n\t3. Send Sync")
         option = int(input())
         if option == 1:
+            # update the clock for each transaction
+            local_clock[CLIENT_ID] += 1
             print("Enter the Reciever ID: ")
             reciever = int(input())
             print("Enter the amount you wish to send: ")
             amount = float(input())
-            print(colored(f"You {PID} are sending {amount} to {reciever}", 'yellow'))
-            if calculateBalance(bchain, INIT_BAL, PID) >= amount:
-                transaction = Node(PID, reciever, amount, local_clock[CLIENT_ID-1])
+            print(colored(f"You {PORT} are sending {amount} to {reciever}", 'yellow'))
+            if calculateBalance(bchain, INIT_BAL, PORT) >= amount:
+                transaction = Node(PORT, reciever, amount, local_clock[CLIENT_ID])
+                bchain.append(transaction)
                 print(colored("SUCCESS", 'green'))
             else:
                 print(colored("INCORRECT", 'red'))
-            bchain.append(transaction)
-            # update the clock for each transaction
-            local_clock[CLIENT_ID] += 1
+                local_clock[CLIENT_ID] -= 1
             # TODO: need to figure out the logic of what needs to happen.
             # maybe send updates to all the other clients-timetables 
         elif option == 2:
             # this should be simple since there is no need to check or make any request to other clients
-            print(colored(f"Checking balance for {PID}.", 'yellow'))
-            balance = calculateBalance(bchain, INIT_BAL, PID)
+            print(colored(f"Checking balance for {PORT}.", 'yellow'))
+            balance = calculateBalance(bchain, INIT_BAL, PORT)
             print(colored(f"The balance is: ${balance}.", 'green'))
         elif option == 3:
             # TODO: maybe logic for sync to a specific client
@@ -78,11 +77,13 @@ def build_msg(client_id):
     client_clock = time_table[client_id]
 
     for i in range(len(client_clock)):
-        curr_sender = i + 9000 + 1
+        curr_client = i + 9000 + 1
         # TODO: filter the transactions based on clock value and client
         for transaction in bchain:
-            if transaction.sender == curr_sender and transaction.clock > client_clock[i]:
-                msg.transactions.append(transaction)
+            if transaction.sender == curr_client and transaction.clock >= client_clock[i]:
+                print(colored(f"Found a non sync transcation.", 'yellow'))
+                if transaction not in msg.transactions:
+                    msg.transactions.append(transaction)
 
     print(colored(f"The sync message is built: {msg} with {len(msg.transactions)} transactions.", 'yellow'))
     msg = pickle.dumps(msg)
@@ -120,17 +121,21 @@ def process_clients_sync(conn, addr):
     data = conn.recv(1024)
     msg = pickle.loads(data)
 
-    # thread to update the time table and local clock
-    clock_update = threading.Thread(name="Update clock and time table thread", target=update_clock, args=(msg.clock,))
-    clock_update.start()
-    
-    # thread to update blockchain
-    bchain_update = threading.Thread(name="Update blockchain thread", target=update_bchain, args=(msg.transactions, msg.client_id))
-    bchain_update.start()
+    # thread causes issue here...change it to step by step maybe 
 
+    # thread to update blockchain
+    # bchain_update = threading.Thread(name="Update blockchain thread", target=update_bchain, args=(msg.transactions, msg.client_id))
+    # bchain_update.start()
+    update_bchain(msg.transactions, msg.client_id)
+
+    # thread to update the time table and local clock
+    # clock_update = threading.Thread(name="Update clock and time table thread", target=update_clock, args=(msg.clock,msg.client_id))
+    # clock_update.start()
+    update_clock(msg.clock,msg.client_id)
+    
     # cleanup
-    clock_update.join()
-    bchain_update.join()
+    # bchain_update.join()
+    # clock_update.join()
 
 
 def listen_to_clients():
@@ -138,8 +143,9 @@ def listen_to_clients():
     client_listen.bind((HOSTNAME, PORT))
     client_listen.listen()
     while True:
-        print("Waiting for connections.")
+        print(colored("Waiting for connections.", 'cyan'))
         conn, addr = client_listen.accept()
+        print(colored(f"Sync message recieved.", 'yellow'))
         update_thread = threading.Thread(name="Sync Message Thread", target=process_clients_sync, args=(conn, addr))
         update_thread.start()
         update_thread.join()
@@ -151,27 +157,31 @@ def update_bchain(transactions, client_id):
     lock2.acquire()
     for transaction in transactions:
         if transaction.clock <= local_clock[client_id]:
+            print(colored(f'Clock is low. Clock value in transaction is {transaction.clock}', 'red'))
             continue
-        bchain.append(transaction)
-        print(colored(f"Adding transaction.", 'yellow'))
+        if transaction not in bchain:
+            bchain.append(transaction)
+            print(colored(f"Adding transaction: {transaction.sender} to {transaction.reciever} for {transaction.amount}.", 'yellow'))
     lock2.release()
 
 
 # update the local clock
-def update_clock(recieved_clock):
+def update_clock(recieved_clock, client_id):
     global local_clock
     global time_table
     lock1.acquire()
-    for client_id in range(len(recieved_clock)):
-        local_clock[client_id] = max(recieved_clock[client_id], local_clock[client_id])
+    for client in range(len(recieved_clock)):
+        local_clock[client] = max(recieved_clock[client], local_clock[client])
     # updating the 2D-time table here as well 
-    time_table[CLIENT_ID] = recieved_clock
+    time_table[client_id] = recieved_clock
+    time_table[CLIENT_ID] = local_clock
+    print(time_table)
     lock1.release()
 
 
 
 if __name__ == '__main__':
-    print(colored(f"Starting client with PID: {PID}.", 'blue'))
+    print(colored(f"Starting client with ID: {PORT}.", 'blue'))
     p = threading.Thread(name='Listen to Clients', target=listen_to_clients, args=())
     p.daemon = True
     p.start()
