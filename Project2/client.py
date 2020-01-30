@@ -31,7 +31,7 @@ def create_transactions():
     global bchain
     while True:
         print(bchain)
-        print(colored(f"\n\nThis client ID is {PORT}.", 'cyan'))
+        print(colored(f"\n\n(alert) This client ID is {PORT}.", 'cyan'))
         print("What type of transaction do you want to issue?\n\t1. Transfer\n\t2. Balance\n\t3. Send Sync")
         option = int(input())
         if option == 1:
@@ -41,21 +41,21 @@ def create_transactions():
             reciever = int(input())
             print("Enter the amount you wish to send: ")
             amount = float(input())
-            print(colored(f"You {PORT} are sending {amount} to {reciever}", 'yellow'))
+            print(colored(f"(message) You {PORT} are sending {amount} to {reciever}", 'yellow'))
             if calculateBalance(bchain, INIT_BAL, PORT) >= amount:
                 transaction = Node(PORT, reciever, amount, local_clock[CLIENT_ID])
                 bchain.append(transaction)
-                print(colored("SUCCESS", 'green'))
+                print(colored("(response) SUCCESS", 'green'))
             else:
-                print(colored("INCORRECT", 'red'))
+                print(colored("(response) INCORRECT", 'red'))
                 local_clock[CLIENT_ID] -= 1
             # TODO: need to figure out the logic of what needs to happen.
             # maybe send updates to all the other clients-timetables 
         elif option == 2:
             # this should be simple since there is no need to check or make any request to other clients
-            print(colored(f"Checking balance for {PORT}.", 'yellow'))
+            print(colored(f"(message) Checking balance for {PORT}.", 'yellow'))
             balance = calculateBalance(bchain, INIT_BAL, PORT)
-            print(colored(f"The balance is: ${balance}.", 'green'))
+            print(colored(f"(response) The balance is: ${balance}.", 'green'))
         elif option == 3:
             # TODO: maybe logic for sync to a specific client
             print("Enter the Reciever ID: ")
@@ -65,7 +65,7 @@ def create_transactions():
             send_sync.start()
             send_sync.join()
     
-        print(colored(f"Clock: {local_clock}", 'yellow'))
+        print(colored(f"(message) Clock: {local_clock}", 'yellow'))
 
 def build_msg(client_id):
     global bchain
@@ -80,11 +80,11 @@ def build_msg(client_id):
         # TODO: filter the transactions based on clock value and client
         for transaction in bchain:
             if transaction.sender == curr_client and transaction.clock >= client_clock[i]:
-                print(colored(f"Found a non sync transcation.", 'yellow'))
+                # print(colored(f"(message) Found a non sync transcation.", 'yellow'))
                 if transaction not in msg.transactions:
                     msg.transactions.append(transaction)
 
-    print(colored(f"The sync message is built: {msg} with {len(msg.transactions)} transactions.", 'yellow'))
+    print(colored(f"(message) The sync message is built: {msg}.", 'yellow'))
     msg = pickle.dumps(msg)
     return msg
 
@@ -93,7 +93,7 @@ def send_to_clients(msg, client_id):
     global local_clock
     global CLIENTS
     
-    print(colored(f"Sync timetable and transactions.", 'yellow'))
+    print(colored(f"(message) Sync timetable and transactions.", 'yellow'))
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         # sending the sync message to client_id
@@ -101,7 +101,7 @@ def send_to_clients(msg, client_id):
         s.send(msg)
         s.close()
     except:
-        print(colored(f"Client on port {client_id} is offline.", 'yellow'))
+        print(colored(f"(message) Client on port {client_id} is offline.", 'yellow'))
     
 def process_clients_sync(conn, addr):
     data = conn.recv(1024)
@@ -115,9 +115,9 @@ def listen_to_clients():
     client_listen.bind((HOSTNAME, PORT))
     client_listen.listen()
     while True:
-        print(colored("Waiting for connections.", 'cyan'))
+        print(colored("(alert) Waiting for connections.", 'cyan'))
         conn, addr = client_listen.accept()
-        print(colored(f"Sync message recieved.", 'yellow'))
+        print(colored(f"(message) Sync message recieved.", 'yellow'))
         update_thread = threading.Thread(name="Sync Message Thread", target=process_clients_sync, args=(conn, addr))
         update_thread.start()
         update_thread.join()
@@ -129,11 +129,11 @@ def update_bchain(transactions, client_id):
     lock2.acquire()
     for transaction in transactions:
         if transaction.clock <= local_clock[client_id]:
-            print(colored(f'Clock is low. Clock value in transaction is {transaction.clock}', 'red'))
+            # print(colored(f'Clock is low. Clock value in transaction is {transaction.clock}', 'red'))
             continue
         if transaction not in bchain:
             bchain.append(transaction)
-            print(colored(f"Adding transaction: {transaction.sender} to {transaction.reciever} for {transaction.amount}.", 'yellow'))
+            print(colored(f"(message) Adding transaction: {transaction.sender} to {transaction.reciever} for {transaction.amount}.", 'yellow'))
     lock2.release()
 
 
@@ -153,7 +153,7 @@ def update_clock(recieved_clock, client_id):
 
 
 if __name__ == '__main__':
-    print(colored(f"Starting client with ID: {PORT}.", 'blue'))
+    print(colored(f"(alert) Starting client with ID: {PORT}.", 'blue'))
     p = threading.Thread(name='Listen to Clients', target=listen_to_clients, args=())
     p.daemon = True
     p.start()
