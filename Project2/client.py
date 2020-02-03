@@ -29,6 +29,7 @@ time_table  = [[0,0,0], [0,0,0], [0,0,0]]
 def create_transactions():
     global local_clock
     global bchain
+    global time_table
     while True:
         print(bchain)
         print(colored(f"\n\n(alert) This client ID is {PORT}.", 'cyan'))
@@ -64,8 +65,10 @@ def create_transactions():
             send_sync = threading.Thread(name="Send sync message thread", target=send_to_clients, args=(msg, reciever))
             send_sync.start()
             send_sync.join()
-    
+        time_table[CLIENT_ID] = local_clock
         print(colored(f"(message) Clock: {local_clock}", 'yellow'))
+        print(colored(f"(message) Updated TT for {CLIENT_ID}", 'yellow'))
+        print(colored(f"(message) TT: {time_table}", 'yellow'))
 
 def build_msg(client_id):
     global bchain
@@ -79,7 +82,7 @@ def build_msg(client_id):
         curr_client = i + 9000 + 1
         # TODO: filter the transactions based on clock value and client
         for transaction in bchain:
-            if transaction.sender == curr_client and transaction.clock >= client_clock[i]:
+            if transaction.sender == curr_client and transaction.clock >= client_clock[i] and transaction.sender != client_id+9000+1:
                 # print(colored(f"(message) Found a non sync transcation.", 'yellow'))
                 if transaction not in msg.transactions:
                     msg.transactions.append(transaction)
@@ -128,10 +131,10 @@ def update_bchain(transactions, client_id):
     global bchain
     lock2.acquire()
     for transaction in transactions:
-        if transaction.clock <= local_clock[client_id]:
+        if transaction.clock <= local_clock[client_id] and (transaction.sender is (9001+client_id)):
             # print(colored(f'Clock is low. Clock value in transaction is {transaction.clock}', 'red'))
             continue
-        if transaction not in bchain:
+        elif (transaction.clock > local_clock[client_id]) and (transaction not in bchain):
             bchain.append(transaction)
             print(colored(f"(message) Adding transaction: {transaction.sender} to {transaction.reciever} for {transaction.amount}.", 'yellow'))
     lock2.release()
