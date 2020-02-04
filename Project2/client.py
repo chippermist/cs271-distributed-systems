@@ -65,6 +65,8 @@ def create_transactions():
             send_sync = threading.Thread(name="Send sync message thread", target=send_to_clients, args=(msg, reciever))
             send_sync.start()
             send_sync.join()
+        else:
+            print(colored("Incorrect transaction type.", 'yellow'))
         update_clock(local_clock, CLIENT_ID)
         print(colored(f"(message) Clock: {local_clock}", 'yellow'))
         print(colored(f"(message) Updated TT for {CLIENT_ID}", 'yellow'))
