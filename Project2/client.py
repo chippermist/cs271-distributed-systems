@@ -42,7 +42,7 @@ def create_transactions():
             reciever = int(input())
             print("Enter the amount you wish to send: ")
             amount = float(input())
-            print(colored(f"(message) You {PORT} are sending {amount} to {reciever}", 'yellow'))
+            print(colored(f"(message) You {PORT} are sending {amount} to {reciever}, clock: {local_clock[CLIENT_ID]}", 'yellow'))
             if calculateBalance(bchain, INIT_BAL, PORT) >= amount:
                 transaction = Node(PORT, reciever, amount, local_clock[CLIENT_ID])
                 bchain.append(transaction)
@@ -50,15 +50,15 @@ def create_transactions():
             else:
                 print(colored("(response) INCORRECT", 'red'))
                 local_clock[CLIENT_ID] -= 1
-            # TODO: need to figure out the logic of what needs to happen.
-            # maybe send updates to all the other clients-timetables 
         elif option == 2:
             # this should be simple since there is no need to check or make any request to other clients
             print(colored(f"(message) Checking balance for {PORT}.", 'yellow'))
             balance = calculateBalance(bchain, INIT_BAL, PORT)
             print(colored(f"(response) The balance is: ${balance}.", 'green'))
+            for client in CLIENTS:
+                balance = calculateBalance(bchain, INIT_BAL, client)
+                print(colored(f"(response) The estimated balance for {client} is: ${balance}.", 'green'))
         elif option == 3:
-            # TODO: maybe logic for sync to a specific client
             print("Enter the Reciever ID: ")
             reciever = int(input())
             msg = build_msg(reciever)
@@ -76,16 +76,15 @@ def build_msg(client_id):
     global bchain
     global time_table
     global local_clock
-    client_id = client_id - 9000 - 1
+    client_id = client_id - 9001
     msg = SyncMsg(CLIENT_ID, local_clock)
     client_clock = time_table[client_id]
+    print(f"Client clock is : {client_clock}")
 
     for i in range(len(client_clock)):
-        curr_client = i + 9001
-        # TODO: filter the transactions based on clock value and client
+        clock_val = client_clock[i]
         for transaction in bchain:
-            if transaction.sender == curr_client and transaction.clock >= client_clock[i] and transaction.sender != client_id+90001:
-                # print(colored(f"(message) Found a non sync transcation.", 'yellow'))
+            if transaction.clock > clock_val:
                 if transaction not in msg.transactions:
                     msg.transactions.append(transaction)
 
@@ -132,11 +131,9 @@ def update_bchain(transactions, client_id):
     global local_clock
     global bchain
     lock2.acquire()
+    print(f"Client id is: {client_id}")
     for transaction in transactions:
-        if transaction.clock <= local_clock[client_id] and (transaction.sender is (9001+CLIENT_ID)):
-            # print(colored(f'Clock is low. Clock value in transaction is {transaction.clock}', 'red'))
-            continue
-        elif (transaction.clock > local_clock[client_id]) and (transaction not in bchain) and (transaction.sender != 9001+CLIENT_ID):
+        if transaction.clock > local_clock[transaction.sender - 9001] and transaction not in bchain:
             bchain.append(transaction)
             print(colored(f"(message) Adding transaction: {transaction.sender} to {transaction.reciever} for {transaction.amount}.", 'yellow'))
     lock2.release()
@@ -150,7 +147,7 @@ def update_clock(recieved_clock, client_id):
     for client in range(len(recieved_clock)):
         local_clock[client] = max(recieved_clock[client], local_clock[client])
     # updating the 2D-time table here as well 
-    time_table[client_id] = recieved_clock
+    time_table[client_id] = max(recieved_clock, local_clock)
     time_table[CLIENT_ID] = local_clock
     print(time_table)
     lock1.release()
